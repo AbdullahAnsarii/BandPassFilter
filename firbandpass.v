@@ -36,15 +36,29 @@
 // Numerator         : s14,15 -> [-2.500000e-01 2.500000e-01)
 // Input             : s8,9 -> [-2.500000e-01 2.500000e-01)
 // Filter Internals  : Specify Precision
-//   Output          : s8,32 -> [-2.980232e-08 2.980232e-08)
+//   Output          : s8,32 -> [-2.980232e-08 2.980232e-08)  <-- see note below
 //   Product         : s16,17 -> [-2.500000e-01 2.500000e-01)
 //   Accumulator     : s20,20 -> [-5.000000e-01 5.000000e-01)
 //   Round Mode      : floor
 //   Overflow Mode   : saturate
 // -------------------------------------------------------------
-
-
-
+// Manual fix applied on top of the generated code:
+//
+//   The generated output format was sfix8_En32, a range of +/-2.98e-08, fed
+//   from an sfix20_En20 accumulator whose range is +/-0.5 -- seventeen
+//   million times wider. Every non-zero accumulator value therefore hit the
+//   saturation limit, and data_out carried nothing but the sign: sweeping the
+//   whole accumulator range through the generated conversion produces only
+//   -128 and +127. (The golden vectors in the generated firbandpass_tb.v were
+//   produced from the same specification, so they contain only 8'h7f, 8'h80
+//   and 8'h00 and the broken design passes its own test bench.)
+//
+//   data_out is now the accumulator itself, sfix20_En20, so the filter output
+//   is carried at full precision with no saturation: the peak gain is 1.088
+//   and the input range is +/-0.25, so |output| <= 0.397 < 0.5. Use
+//   tb_firbandpass.v, which checks the design against an independent
+//   reference model instead of against stored vectors.
+// -------------------------------------------------------------
 
 `timescale 1 ns / 1 ns
 
@@ -61,7 +75,7 @@ module basicfir
   input   clk_enable; 
   input   reset; 
   input   signed [7:0] data_in; //sfix8_En9
-  output  signed [7:0] data_out; //sfix8_En32
+  output  signed [19:0] data_out; //sfix20_En20
 
 ////////////////////////////////////////////////////////////////
 //Module Architecture: basicfir
@@ -426,8 +440,8 @@ module basicfir
   wire signed [19:0] add_signext_98; // sfix20_En20
   wire signed [19:0] add_signext_99; // sfix20_En20
   wire signed [20:0] add_temp_49; // sfix21_En20
-  wire signed [7:0] output_typeconvert; // sfix8_En32
-  reg  signed [7:0] output_register; // sfix8_En32
+  wire signed [19:0] output_typeconvert; // sfix20_En20
+  reg  signed [19:0] output_register; // sfix20_En20
 
   // Block Statements
   always @( posedge clk or posedge reset)
@@ -998,8 +1012,7 @@ module basicfir
   assign sum50 = (add_temp_49[20] == 1'b0 & add_temp_49[19] != 1'b0) ? 20'b01111111111111111111 : 
       (add_temp_49[20] == 1'b1 && add_temp_49[19] != 1'b1) ? 20'b10000000000000000000 : add_temp_49[19:0];
 
-  assign output_typeconvert = (sum50[19] == 1'b0 & sum50[18:0] != 19'b0000000000000000000) ? 8'b01111111 : 
-      (sum50[19] == 1'b1 && sum50[18:0] != 19'b1111111111111111111) ? 8'b10000000 : $signed({sum50[19], 7'b0000000});
+  assign output_typeconvert = sum50;
 
   always @ (posedge clk or posedge reset)
     begin: Output_Register_process
