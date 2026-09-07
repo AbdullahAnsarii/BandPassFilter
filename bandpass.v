@@ -38,6 +38,17 @@
 //   Round Mode      : convergent
 //   Overflow Mode   : wrap
 // -------------------------------------------------------------
+// Manual fix applied on top of the generated code:
+//
+//   The generated accumulator was sfix26_En24, i.e. a range of [-2, 2), but
+//   this filter's worst-case gain is sum(|h|) = 2.375. With the generated
+//   "wrap" overflow mode a loud in-band signal (a full-scale square wave at
+//   the centre frequency wraps on ~48% of samples) pushed the accumulator
+//   past +2 and it wrapped to -2, inverting the sample. The accumulator and
+//   the final-sum register are now sfix27_En24, range [-4, 4), which covers
+//   the worst case with margin, so overflow is impossible and the datapath
+//   is bit-exact. filter_out is unchanged: sfix33_En30 was already [-4, 4).
+// -------------------------------------------------------------
 
 `timescale 1 ns / 1 ns
 
@@ -80,17 +91,17 @@ module bandpass_filter
   wire phase_0; // boolean
   reg  signed [17:0] delay_pipeline [0:10] ; // sfix18_En17
   wire signed [17:0] inputmux_1; // sfix18_En17
-  reg  signed [25:0] acc_final; // sfix26_En24
-  reg  signed [25:0] acc_out_1; // sfix26_En24
+  reg  signed [26:0] acc_final; // sfix27_En24
+  reg  signed [26:0] acc_out_1; // sfix27_En24
   wire signed [25:0] product_1; // sfix26_En24
   wire signed [5:0] product_1_mux; // sfix6_En5
   wire signed [23:0] mul_temp; // sfix24_En22
-  wire signed [25:0] prod_typeconvert_1; // sfix26_En24
-  wire signed [25:0] acc_sum_1; // sfix26_En24
-  wire signed [25:0] acc_in_1; // sfix26_En24
-  wire signed [25:0] add_signext; // sfix26_En24
-  wire signed [25:0] add_signext_1; // sfix26_En24
-  wire signed [26:0] add_temp; // sfix27_En24
+  wire signed [26:0] prod_typeconvert_1; // sfix27_En24
+  wire signed [26:0] acc_sum_1; // sfix27_En24
+  wire signed [26:0] acc_in_1; // sfix27_En24
+  wire signed [26:0] add_signext; // sfix27_En24
+  wire signed [26:0] add_signext_1; // sfix27_En24
+  wire signed [27:0] add_temp; // sfix28_En24
   wire signed [32:0] output_typeconvert; // sfix33_En30
   reg  signed [32:0] output_register; // sfix33_En30
 
@@ -178,7 +189,7 @@ module bandpass_filter
   assign add_signext = prod_typeconvert_1;
   assign add_signext_1 = acc_out_1;
   assign add_temp = add_signext + add_signext_1;
-  assign acc_sum_1 = add_temp[25:0];
+  assign acc_sum_1 = add_temp[26:0];
 
   assign acc_in_1 = (phase_0 == 1'b1) ? prod_typeconvert_1 :
                    acc_sum_1;
@@ -207,7 +218,7 @@ module bandpass_filter
       end
     end // Finalsum_reg_process
 
-  assign output_typeconvert = $signed({acc_final[25:0], 6'b000000});
+  assign output_typeconvert = $signed({acc_final[26:0], 6'b000000});
 
   always @ (posedge clk or posedge reset)
     begin: Output_Register_process

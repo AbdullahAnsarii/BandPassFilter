@@ -1,0 +1,17 @@
+# Icarus Verilog build products
+build/
+*.vvp
+*.vcd
+
+# Vivado / ISE / Quartus
+*.jou
+*.log
+*.str
+*.wdb
+.Xil/
+work/
+xsim.dir/
+
+# OS
+.DS_Store
+Thumbs.db
